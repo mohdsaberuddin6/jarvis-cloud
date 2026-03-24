@@ -14,7 +14,18 @@ def scheduler():
 
         for task in tasks[:]:
             if now >= task["time"]:
-                print(f"✅ Sending message to {task['target']}: {task['message']}")
+                from twilio.rest import Client
+
+                account_sid = "ACbd38d96db1dd35dd5e6238c368d7b2d0"
+                auth_token = "1034c11df8b2fa5475cba2376a204efb"
+
+                client = Client(account_sid, auth_token)
+
+                client.messages.create(
+                    from_='whatsapp:+14155238886',
+                    body=task["message"],
+                    to=f'whatsapp:{task["target"]}'
+                )
                 tasks.remove(task)
 
         time.sleep(5)
