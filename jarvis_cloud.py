@@ -39,6 +39,10 @@ def scheduler():
 
         time.sleep(5)
 
+@app.route("/")
+def home():
+    return "Jarvis Cloud Running ✅"
+
 # 🌐 API to receive tasks
 @app.route("/schedule", methods=["POST"])
 def schedule():
