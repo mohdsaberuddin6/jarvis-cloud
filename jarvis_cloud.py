@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import datetime
 import threading
 import time
+from datetime import timezone
 
 app = Flask(__name__)
 
@@ -10,16 +11,18 @@ tasks = []
 # 🔁 Background scheduler
 def scheduler():
     while True:
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(timezone.utc)
 
         for task in tasks[:]:
+            print("⏳ Checking task:", task["time"], "Current:", now)
+
             if now >= task["time"]:
-                print("⏳ Checking task:", task["time"], "Current:", now)
                 from twilio.rest import Client
 
-                account_sid = "ACbd38d96db1dd35dd5e6238c368d7b2d0"
-                auth_token = "1034c11df8b2fa5475cba2376a204efb"
+              import os
 
+account_sid = os.environ.get("TWILIO_SID")
+auth_token = os.environ.get("TWILIO_AUTH")
                 client = Client(account_sid, auth_token)
 
                 client.messages.create(
@@ -27,6 +30,8 @@ def scheduler():
                     body=task["message"],
                     to=f'whatsapp:{task["target"]}'
                 )
+
+                print("✅ Message sent:", task["message"])
                 tasks.remove(task)
 
         time.sleep(5)
@@ -36,10 +41,16 @@ def scheduler():
 def schedule():
     data = request.json
 
+    # Convert string → datetime
+    local_time = datetime.datetime.strptime(data["time"], "%Y-%m-%d %H:%M")
+
+    # Convert IST → UTC
+    utc_time = local_time - datetime.timedelta(hours=5, minutes=30)
+
     task = {
         "target": data["target"],
         "message": data["message"],
-        "time": datetime.datetime.strptime(data["time"], "%Y-%m-%d %H:%M")
+        "time": utc_time.replace(tzinfo=timezone.utc)
     }
 
     tasks.append(task)
@@ -51,4 +62,8 @@ def schedule():
 # 🚀 Start everything
 if __name__ == "__main__":
     threading.Thread(target=scheduler, daemon=True).start()
-    app.run(host="0.0.0.0", port=5000)
+
+    import os
+    port = int(os.environ.get("PORT", 5000))
+
+    app.run(host="0.0.0.0", port=port)
