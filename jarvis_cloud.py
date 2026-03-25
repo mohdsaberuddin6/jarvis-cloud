@@ -137,6 +137,7 @@ def scheduler():
 # ---------------- ROUTES ----------------
 @app.route("/")
 def home():
+    print("🔥 HOME ENDPOINT HIT")
     return "Jarvis Cloud Running ✅"
 
 @app.route("/schedule", methods=["POST"])
@@ -187,9 +188,11 @@ def schedule():
 if __name__ == "__main__":
     load_tasks()
 
-    threading.Thread(target=scheduler, daemon=True).start()
+    scheduler_thread = threading.Thread(target=scheduler)
+    scheduler_thread.daemon = True
+    scheduler_thread.start()
 
     port = int(os.environ.get("PORT", 10000))
     print(f"🚀 Running on port {port}")
 
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, threaded=True)
