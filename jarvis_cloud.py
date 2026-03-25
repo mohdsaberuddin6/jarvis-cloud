@@ -136,6 +136,10 @@ def home():
 
 @app.route("/schedule", methods=["POST"])
 def schedule():
+     # 🔥 ADD HERE (TOP OF FUNCTION)
+    print("🔥 REQUEST RECEIVED:", request.json)
+    print("🔐 API KEY FROM HEADER:", request.headers.get("x-api-key"))
+    print("🔐 API KEY FROM ENV:", API_KEY)
 
     # SECURITY
     if not API_KEY or request.headers.get("x-api-key") != API_KEY:
