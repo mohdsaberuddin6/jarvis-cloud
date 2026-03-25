@@ -14,6 +14,7 @@ def scheduler():
 
         for task in tasks[:]:
             if now >= task["time"]:
+                print("⏳ Checking task:", task["time"], "Current:", now)
                 from twilio.rest import Client
 
                 account_sid = "ACbd38d96db1dd35dd5e6238c368d7b2d0"
