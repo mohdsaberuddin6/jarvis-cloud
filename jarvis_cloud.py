@@ -32,14 +32,21 @@ def save_tasks():
 def load_tasks():
     global tasks
     if os.path.exists(TASK_FILE):
-        with open(TASK_FILE, "r") as f:
-            tasks = json.load(f)
-            for t in tasks:
-                t["time"] = datetime.datetime.fromisoformat(t["time"])
+        try:
+            with open(TASK_FILE, "r") as f:
+                tasks = json.load(f)
 
+                for t in tasks:
+                    t["time"] = datetime.datetime.fromisoformat(t["time"])
+
+        except Exception as e:
+            print("❌ Task load error:", e)
+            tasks = []
 # ---------------- EMAIL ----------------
 def send_email(receiver_email, subject, message):
     try:
+        print("📧 Sending email to:", receiver_email)
+
         if not EMAIL_USER or not EMAIL_PASS:
             print("❌ Email credentials missing")
             return
@@ -54,31 +61,39 @@ def send_email(receiver_email, subject, message):
             smtp.login(EMAIL_USER, EMAIL_PASS)
             smtp.send_message(msg)
 
-        print("✅ Email sent")
+        print("✅ Email sent SUCCESSFULLY")
 
     except Exception as e:
         print("❌ Email error:", e)
-
 # ---------------- SCHEDULER ----------------
 def scheduler():
     while True:
-        now = datetime.datetime.now(datetime.timezone.utc)
+        try:
+            now = datetime.datetime.now(datetime.timezone.utc)
 
-        for task in tasks[:]:
-            if now >= task["time"]:
-                print("⏳ Running task:", task)
+            for task in tasks[:]:
+                if now >= task["time"]:
+                    print("⏳ Running task:", task)
 
-                try:
-                    # EMAIL
-                    if task.get("subject"):
-                        send_email(task["target"], task["subject"], task["message"])
+                    try:
+                        # ✅ EMAIL DETECTION
+                        if "@" in task["target"]:
+                            send_email(
+                                task["target"],
+                                task.get("subject", "No Subject"),
+                                task["message"]
+                            )
+                            print("✅ Email sent")
 
-                    # WHATSAPP
-                    else:
-                        if not TWILIO_SID or not TWILIO_AUTH:
-                            print("❌ Twilio credentials missing")
                         else:
-                            client = Client(TWILIO_SID, TWILIO_AUTH)
+                            account_sid = os.environ.get("TWILIO_SID")
+                            auth_token = os.environ.get("TWILIO_AUTH")
+
+                            if not account_sid or not auth_token:
+                                print("❌ Twilio not configured")
+                                continue
+
+                            client = Client(account_sid, auth_token)
 
                             client.messages.create(
                                 from_='whatsapp:+14155238886',
@@ -88,14 +103,17 @@ def scheduler():
 
                             print("✅ WhatsApp sent")
 
-                except Exception as e:
-                    print("❌ Task error:", e)
+                    except Exception as e:
+                        print("❌ Task error:", e)
 
-                tasks.remove(task)
-                save_tasks()
+                    # ✅ REMOVE AFTER EXECUTION
+                    tasks.remove(task)
+                    save_tasks()
+
+        except Exception as e:
+            print("❌ Scheduler crash:", e)
 
         time.sleep(5)
-
 # ---------------- ROUTES ----------------
 @app.route("/")
 def home():
@@ -157,5 +175,4 @@ if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
-      
+     
