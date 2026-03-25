@@ -4,6 +4,7 @@ import threading
 import time
 import os
 import json
+import uuid
 from email.message import EmailMessage
 import smtplib
 from twilio.rest import Client
@@ -13,20 +14,26 @@ app = Flask(__name__)
 # ---------------- CONFIG ----------------
 TASK_FILE = "tasks.json"
 
-API_KEY = "mysecret123"
+API_KEY = os.environ.get("API_KEY")
+
 TWILIO_SID = os.environ.get("TWILIO_SID")
 TWILIO_AUTH = os.environ.get("TWILIO_AUTH")
 
+EMAIL_USER = os.environ.get("EMAIL_USER")
+EMAIL_PASS = os.environ.get("EMAIL_PASS")
+
 tasks = []
+lock = threading.Lock()
 
 # ---------------- SAVE / LOAD ----------------
 def save_tasks():
     try:
-        with open(TASK_FILE, "w") as f:
-            json.dump([
-                {**t, "time": t["time"].strftime("%Y-%m-%d %H:%M:%S")}
-                for t in tasks
-            ], f, indent=4)
+        with lock:
+            with open(TASK_FILE, "w") as f:
+                json.dump([
+                    {**t, "time": t["time"].strftime("%Y-%m-%d %H:%M")}
+                    for t in tasks
+                ], f, indent=4)
     except Exception as e:
         print("❌ Save error:", e)
 
@@ -37,7 +44,7 @@ def load_tasks():
             with open(TASK_FILE, "r") as f:
                 data = json.load(f)
                 tasks = [
-                    {**t, "time": datetime.datetime.strptime(t["time"], "%Y-%m-%d %H:%M:%S")}
+                    {**t, "time": datetime.datetime.strptime(t["time"], "%Y-%m-%d %H:%M")}
                     for t in data
                 ]
         except Exception as e:
@@ -48,11 +55,6 @@ def load_tasks():
 def send_email(receiver_email, subject, message):
     try:
         print("📧 Sending email to:", receiver_email)
-
-        # 🔥 load env here
-        EMAIL_USER = "mohdsaberuddin6@gmail.com"
-        EMAIL_PASS = "clpu homj xyyn maug"
-        print("👤 EMAIL_USER:", EMAIL_USER)
 
         if not EMAIL_USER or not EMAIL_PASS:
             print("❌ Email credentials missing")
@@ -68,7 +70,7 @@ def send_email(receiver_email, subject, message):
             smtp.login(EMAIL_USER, EMAIL_PASS)
             smtp.send_message(msg)
 
-        print("✅ Email sent SUCCESSFULLY")
+        print("✅ Email sent")
 
     except Exception as e:
         print("❌ Email error:", e)
@@ -79,49 +81,53 @@ def scheduler():
 
     while True:
         try:
-            now = datetime.datetime.now()
+            now = datetime.datetime.utcnow()
 
-            print("\n🧠 ===== LOOP START =====")
-            print("⏰ Current time:", now)
-            print("📦 Tasks:", tasks)
+            with lock:
+                for task in tasks[:]:
+                    diff = (now - task["time"]).total_seconds()
 
-            for task in tasks[:]:
-                print("📅 Checking task:", task["time"])
+                    print(f"⏰ NOW: {now}")
+                    print(f"📅 TASK: {task['time']}")
+                    print(f"⏳ DIFF: {diff}")
 
-                if now >= task["time"]:
-                    print("⏳ Running task:", task)
+                    # ✅ RUN within 60 sec window
+                    if 0 <= diff <= 60:
+                        print("🔥 EXECUTING TASK:", task)
 
-                    try:
-                        # EMAIL
-                        if "@" in task["target"]:
-                            send_email(
-                                task["target"],
-                                task.get("subject", "No Subject"),
-                                task["message"]
-                            )
+                        try:
+                            # EMAIL
+                            if "@" in task["target"]:
+                                send_email(
+                                    task["target"],
+                                    task.get("subject", "No Subject"),
+                                    task["message"]
+                                )
 
-                        # WHATSAPP
-                        else:
-                            if not TWILIO_SID or not TWILIO_AUTH:
-                                print("❌ Twilio not configured")
-                                continue
+                            # WHATSAPP
+                            else:
+                                if not TWILIO_SID or not TWILIO_AUTH:
+                                    print("❌ Twilio not configured → removing task")
+                                    tasks.remove(task)
+                                    save_tasks()
+                                    continue
 
-                            client = Client(TWILIO_SID, TWILIO_AUTH)
+                                client = Client(TWILIO_SID, TWILIO_AUTH)
 
-                            client.messages.create(
-                                from_='whatsapp:+14155238886',
-                                body=task["message"],
-                                to=f'whatsapp:{task["target"]}'
-                            )
+                                client.messages.create(
+                                    from_='whatsapp:+14155238886',
+                                    body=task["message"],
+                                    to=f'whatsapp:{task["target"]}'
+                                )
 
-                            print("✅ WhatsApp sent")
+                                print("✅ WhatsApp sent")
 
-                    except Exception as e:
-                        print("❌ Task error:", e)
+                        except Exception as e:
+                            print("❌ Task error:", e)
 
-                    # REMOVE TASK
-                    tasks.remove(task)
-                    save_tasks()
+                        # REMOVE AFTER EXECUTION
+                        tasks.remove(task)
+                        save_tasks()
 
         except Exception as e:
             print("❌ Scheduler crash:", e)
@@ -135,12 +141,8 @@ def home():
 
 @app.route("/schedule", methods=["POST"])
 def schedule():
-    # 🔥 ADD HERE (TOP OF FUNCTION)
-    print("🔥 REQUEST RECEIVED:", request.json)
-    print("🔐 API KEY FROM HEADER:", request.headers.get("x-api-key"))
-    print("🔐 API KEY FROM ENV:", API_KEY)
+    print("🔥 REQUEST:", request.json)
 
-    # SECURITY
     if not API_KEY or request.headers.get("x-api-key") != API_KEY:
         return jsonify({"error": "Unauthorized"}), 403
 
@@ -158,24 +160,24 @@ def schedule():
         if not target or not message or not time_str:
             return jsonify({"error": "Missing fields"}), 400
 
-        # PARSE TIME
+        # ✅ PARSE TIME (UTC)
         task_time = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
 
         task = {
+            "id": str(uuid.uuid4()),
             "target": target,
             "message": message,
             "subject": subject,
             "time": task_time
         }
 
-        tasks.append(task)
-        save_tasks()
+        with lock:
+            tasks.append(task)
+            save_tasks()
 
-        # 🔥 DEBUG (VERY IMPORTANT)
-        print("📌 Task scheduled:", task)
-        print("📦 Tasks after insert:", tasks)
+        print("📌 Task added:", task)
 
-        return jsonify({"status": "scheduled"})
+        return jsonify({"status": "scheduled", "id": task["id"]})
 
     except Exception as e:
         print("❌ Schedule error:", e)
