@@ -14,8 +14,6 @@ app = Flask(__name__)
 TASK_FILE = "tasks.json"
 
 API_KEY = os.environ.get("API_KEY")
-EMAIL_USER = os.environ.get("EMAIL_USER")
-EMAIL_PASS = os.environ.get("EMAIL_PASS")
 TWILIO_SID = os.environ.get("TWILIO_SID")
 TWILIO_AUTH = os.environ.get("TWILIO_AUTH")
 
@@ -25,7 +23,7 @@ tasks = []
 def save_tasks():
     with open(TASK_FILE, "w") as f:
         json.dump([
-            {**t, "time": t["time"].isoformat()}
+            {**t, "time": t["time"].strftime("%Y-%m-%d %H:%M:%S")}
             for t in tasks
         ], f, indent=4)
 
@@ -36,7 +34,7 @@ def load_tasks():
             with open(TASK_FILE, "r") as f:
                 data = json.load(f)
                 tasks = [
-                    {**t, "time": datetime.datetime.fromisoformat(t["time"])}
+                    {**t, "time": datetime.datetime.strptime(t["time"], "%Y-%m-%d %H:%M:%S")}
                     for t in data
                 ]
         except Exception as e:
@@ -47,6 +45,10 @@ def load_tasks():
 def send_email(receiver_email, subject, message):
     try:
         print("📧 Sending email to:", receiver_email)
+
+        # 🔥 Load env here (IMPORTANT)
+        EMAIL_USER = os.environ.get("EMAIL_USER")
+        EMAIL_PASS = os.environ.get("EMAIL_PASS")
 
         if not EMAIL_USER or not EMAIL_PASS:
             print("❌ Email credentials missing")
@@ -73,12 +75,14 @@ def scheduler():
 
     while True:
         try:
-            now = datetime.datetime.now()  # ✅ LOCAL TIME (no UTC confusion)
+            now = datetime.datetime.now()
+
+            print("\n🧠 ===== LOOP START =====")
+            print("⏰ Current time:", now)
+            print("📦 Tasks:", tasks)
 
             for task in tasks[:]:
-
-                print("⏰ Current time:", now)
-                print("📅 Task time:", task["time"])
+                print("📅 Checking task:", task["time"])
 
                 if now >= task["time"]:
                     print("⏳ Running task:", task)
@@ -111,7 +115,6 @@ def scheduler():
                     except Exception as e:
                         print("❌ Task error:", e)
 
-                    # ✅ REMOVE TASK
                     tasks.remove(task)
                     save_tasks()
 
@@ -146,7 +149,7 @@ def schedule():
         if not target or not message or not time_str:
             return jsonify({"error": "Missing fields"}), 400
 
-        # ✅ PARSE TIME (LOCAL)
+        # ✅ Parse time
         task_time = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
 
         task = {
@@ -160,7 +163,6 @@ def schedule():
         save_tasks()
 
         print("📌 Task scheduled:", task)
-        print("📦 All tasks:", tasks)
 
         return jsonify({"status": "scheduled"})
 
@@ -172,7 +174,7 @@ def schedule():
 if __name__ == "__main__":
     load_tasks()
 
-    # ✅ START SCHEDULER THREAD
+    # 🔥 Start scheduler thread
     threading.Thread(target=scheduler, daemon=True).start()
 
     port = int(os.environ.get("PORT", 10000))
