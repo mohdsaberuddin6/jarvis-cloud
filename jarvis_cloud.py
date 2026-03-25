@@ -13,7 +13,7 @@ app = Flask(__name__)
 # ---------------- CONFIG ----------------
 TASK_FILE = "tasks.json"
 
-API_KEY = os.environ.get("API_KEY")
+API_KEY = "mysecret123"
 TWILIO_SID = os.environ.get("TWILIO_SID")
 TWILIO_AUTH = os.environ.get("TWILIO_AUTH")
 
@@ -50,9 +50,8 @@ def send_email(receiver_email, subject, message):
         print("📧 Sending email to:", receiver_email)
 
         # 🔥 load env here
-        EMAIL_USER = os.environ.get("EMAIL_USER")
-        EMAIL_PASS = os.environ.get("EMAIL_PASS")
-
+        EMAIL_USER = "mohdsaberuddin6@gmail.com"
+        EMAIL_PASS = "clpu homj xyyn maug"
         print("👤 EMAIL_USER:", EMAIL_USER)
 
         if not EMAIL_USER or not EMAIL_PASS:
@@ -136,7 +135,7 @@ def home():
 
 @app.route("/schedule", methods=["POST"])
 def schedule():
-     # 🔥 ADD HERE (TOP OF FUNCTION)
+    # 🔥 ADD HERE (TOP OF FUNCTION)
     print("🔥 REQUEST RECEIVED:", request.json)
     print("🔐 API KEY FROM HEADER:", request.headers.get("x-api-key"))
     print("🔐 API KEY FROM ENV:", API_KEY)
@@ -192,4 +191,3 @@ if __name__ == "__main__":
     print(f"🚀 Running on port {port}")
 
     app.run(host="0.0.0.0", port=port)
-    
