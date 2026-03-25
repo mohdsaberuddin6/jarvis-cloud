@@ -21,11 +21,14 @@ tasks = []
 
 # ---------------- SAVE / LOAD ----------------
 def save_tasks():
-    with open(TASK_FILE, "w") as f:
-        json.dump([
-            {**t, "time": t["time"].strftime("%Y-%m-%d %H:%M:%S")}
-            for t in tasks
-        ], f, indent=4)
+    try:
+        with open(TASK_FILE, "w") as f:
+            json.dump([
+                {**t, "time": t["time"].strftime("%Y-%m-%d %H:%M:%S")}
+                for t in tasks
+            ], f, indent=4)
+    except Exception as e:
+        print("❌ Save error:", e)
 
 def load_tasks():
     global tasks
@@ -46,9 +49,11 @@ def send_email(receiver_email, subject, message):
     try:
         print("📧 Sending email to:", receiver_email)
 
-        # 🔥 Load env here (IMPORTANT)
+        # 🔥 load env here
         EMAIL_USER = os.environ.get("EMAIL_USER")
         EMAIL_PASS = os.environ.get("EMAIL_PASS")
+
+        print("👤 EMAIL_USER:", EMAIL_USER)
 
         if not EMAIL_USER or not EMAIL_PASS:
             print("❌ Email credentials missing")
@@ -88,7 +93,7 @@ def scheduler():
                     print("⏳ Running task:", task)
 
                     try:
-                        # 📧 EMAIL
+                        # EMAIL
                         if "@" in task["target"]:
                             send_email(
                                 task["target"],
@@ -96,7 +101,7 @@ def scheduler():
                                 task["message"]
                             )
 
-                        # 📱 WHATSAPP
+                        # WHATSAPP
                         else:
                             if not TWILIO_SID or not TWILIO_AUTH:
                                 print("❌ Twilio not configured")
@@ -115,6 +120,7 @@ def scheduler():
                     except Exception as e:
                         print("❌ Task error:", e)
 
+                    # REMOVE TASK
                     tasks.remove(task)
                     save_tasks()
 
@@ -131,7 +137,7 @@ def home():
 @app.route("/schedule", methods=["POST"])
 def schedule():
 
-    # 🔐 SECURITY
+    # SECURITY
     if not API_KEY or request.headers.get("x-api-key") != API_KEY:
         return jsonify({"error": "Unauthorized"}), 403
 
@@ -149,7 +155,7 @@ def schedule():
         if not target or not message or not time_str:
             return jsonify({"error": "Missing fields"}), 400
 
-        # ✅ Parse time
+        # PARSE TIME
         task_time = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
 
         task = {
@@ -162,7 +168,9 @@ def schedule():
         tasks.append(task)
         save_tasks()
 
+        # 🔥 DEBUG (VERY IMPORTANT)
         print("📌 Task scheduled:", task)
+        print("📦 Tasks after insert:", tasks)
 
         return jsonify({"status": "scheduled"})
 
@@ -174,7 +182,6 @@ def schedule():
 if __name__ == "__main__":
     load_tasks()
 
-    # 🔥 Start scheduler thread
     threading.Thread(target=scheduler, daemon=True).start()
 
     port = int(os.environ.get("PORT", 10000))
