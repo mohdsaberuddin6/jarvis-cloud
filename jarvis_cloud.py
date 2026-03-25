@@ -4,6 +4,7 @@ import threading
 import time
 import os
 from datetime import timezone
+from twilio.rest import Client
 
 app = Flask(__name__)
 
@@ -12,18 +13,18 @@ tasks = []
 # 🔁 Background scheduler
 def scheduler():
     while True:
-        now = datetime.datetime.now(timezone.utc)
+        now = datetime.datetime.now(datetime.timezone.utc)
 
         for task in tasks[:]:
-            print("⏳ Checking task:", task["time"], "Current:", now)
-
             if now >= task["time"]:
+                print("⏳ Checking task:", task["time"], "Current:", now)
+
                 from twilio.rest import Client
+                import os
 
-             
+                account_sid = os.environ.get("TWILIO_SID")
+                auth_token = os.environ.get("TWILIO_AUTH")
 
-account_sid = os.environ.get("TWILIO_SID")
-auth_token = os.environ.get("TWILIO_AUTH")
                 client = Client(account_sid, auth_token)
 
                 client.messages.create(
@@ -33,6 +34,7 @@ auth_token = os.environ.get("TWILIO_AUTH")
                 )
 
                 print("✅ Message sent:", task["message"])
+
                 tasks.remove(task)
 
         time.sleep(5)
@@ -68,3 +70,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
 
     app.run(host="0.0.0.0", port=port)
+   
