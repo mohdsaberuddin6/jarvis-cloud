@@ -67,16 +67,24 @@ def send_email(receiver_email, subject, message):
         print("❌ Email error:", e)
 # ---------------- SCHEDULER ----------------
 def scheduler():
+    print("🚀 Scheduler started")
+
     while True:
         try:
             now = datetime.datetime.now(datetime.timezone.utc)
 
             for task in tasks[:]:
+
+                # 🔍 DEBUG LOGS
+                print("⏰ Current UTC:", now)
+                print("📅 Task time:", task["time"])
+
+                # ✅ ONLY RUN WHEN TIME MATCHES
                 if now >= task["time"]:
                     print("⏳ Running task:", task)
 
                     try:
-                        # ✅ EMAIL DETECTION
+                        # 📧 EMAIL
                         if "@" in task["target"]:
                             send_email(
                                 task["target"],
@@ -85,6 +93,7 @@ def scheduler():
                             )
                             print("✅ Email sent")
 
+                        # 📱 WHATSAPP
                         else:
                             account_sid = os.environ.get("TWILIO_SID")
                             auth_token = os.environ.get("TWILIO_AUTH")
