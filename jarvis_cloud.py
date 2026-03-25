@@ -4,18 +4,15 @@ import threading
 import time
 import os
 import json
-from datetime import timezone
-from twilio.rest import Client
-import smtplib
 from email.message import EmailMessage
-import pytz
+import smtplib
+from twilio.rest import Client
 
 app = Flask(__name__)
 
 # ---------------- CONFIG ----------------
 TASK_FILE = "tasks.json"
 
-# 🔐 LOAD FROM ENV (SAFE)
 API_KEY = os.environ.get("API_KEY")
 EMAIL_USER = os.environ.get("EMAIL_USER")
 EMAIL_PASS = os.environ.get("EMAIL_PASS")
@@ -27,21 +24,25 @@ tasks = []
 # ---------------- SAVE / LOAD ----------------
 def save_tasks():
     with open(TASK_FILE, "w") as f:
-        json.dump(tasks, f, default=str, indent=4)
+        json.dump([
+            {**t, "time": t["time"].isoformat()}
+            for t in tasks
+        ], f, indent=4)
 
 def load_tasks():
     global tasks
     if os.path.exists(TASK_FILE):
         try:
             with open(TASK_FILE, "r") as f:
-                tasks = json.load(f)
-
-                for t in tasks:
-                    t["time"] = datetime.datetime.fromisoformat(t["time"])
-
+                data = json.load(f)
+                tasks = [
+                    {**t, "time": datetime.datetime.fromisoformat(t["time"])}
+                    for t in data
+                ]
         except Exception as e:
-            print("❌ Task load error:", e)
+            print("❌ Load error:", e)
             tasks = []
+
 # ---------------- EMAIL ----------------
 def send_email(receiver_email, subject, message):
     try:
@@ -65,21 +66,20 @@ def send_email(receiver_email, subject, message):
 
     except Exception as e:
         print("❌ Email error:", e)
+
 # ---------------- SCHEDULER ----------------
 def scheduler():
     print("🚀 Scheduler started")
 
     while True:
         try:
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = datetime.datetime.now()  # ✅ LOCAL TIME (no UTC confusion)
 
             for task in tasks[:]:
 
-                # 🔍 DEBUG LOGS
-                print("⏰ Current UTC:", now)
+                print("⏰ Current time:", now)
                 print("📅 Task time:", task["time"])
 
-                # ✅ ONLY RUN WHEN TIME MATCHES
                 if now >= task["time"]:
                     print("⏳ Running task:", task)
 
@@ -91,18 +91,14 @@ def scheduler():
                                 task.get("subject", "No Subject"),
                                 task["message"]
                             )
-                            print("✅ Email sent")
 
                         # 📱 WHATSAPP
                         else:
-                            account_sid = os.environ.get("TWILIO_SID")
-                            auth_token = os.environ.get("TWILIO_AUTH")
-
-                            if not account_sid or not auth_token:
+                            if not TWILIO_SID or not TWILIO_AUTH:
                                 print("❌ Twilio not configured")
                                 continue
 
-                            client = Client(account_sid, auth_token)
+                            client = Client(TWILIO_SID, TWILIO_AUTH)
 
                             client.messages.create(
                                 from_='whatsapp:+14155238886',
@@ -115,7 +111,7 @@ def scheduler():
                     except Exception as e:
                         print("❌ Task error:", e)
 
-                    # ✅ REMOVE AFTER EXECUTION
+                    # ✅ REMOVE TASK
                     tasks.remove(task)
                     save_tasks()
 
@@ -123,6 +119,7 @@ def scheduler():
             print("❌ Scheduler crash:", e)
 
         time.sleep(5)
+
 # ---------------- ROUTES ----------------
 @app.route("/")
 def home():
@@ -130,45 +127,40 @@ def home():
 
 @app.route("/schedule", methods=["POST"])
 def schedule():
-    # 🔐 SECURITY CHECK
+
+    # 🔐 SECURITY
     if not API_KEY or request.headers.get("x-api-key") != API_KEY:
         return jsonify({"error": "Unauthorized"}), 403
 
     data = request.json
 
     try:
-        # ✅ VALIDATION
         if not data:
-            return jsonify({"error": "No data provided"}), 400
+            return jsonify({"error": "No data"}), 400
 
-        if "target" not in data or "message" not in data or "time" not in data:
-            return jsonify({"error": "Missing required fields"}), 400
+        target = data.get("target")
+        message = data.get("message")
+        subject = data.get("subject", "No Subject")
+        time_str = data.get("time")
 
-        # Basic validation
-        if not isinstance(data["target"], str) or not data["target"]:
-            return jsonify({"error": "Invalid target"}), 400
+        if not target or not message or not time_str:
+            return jsonify({"error": "Missing fields"}), 400
 
-        # Convert string → datetime
-        local_time = datetime.datetime.strptime(data["time"], "%Y-%m-%d %H:%M")
-
-        # ✅ TIMEZONE SAFE
-        ist = pytz.timezone("Asia/Kolkata")
-        utc = pytz.utc
-
-        local_dt = ist.localize(local_time)
-        utc_time = local_dt.astimezone(utc)
+        # ✅ PARSE TIME (LOCAL)
+        task_time = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
 
         task = {
-            "target": data["target"],
-            "message": data["message"],
-            "subject": data.get("subject"),
-            "time": utc_time
+            "target": target,
+            "message": message,
+            "subject": subject,
+            "time": task_time
         }
 
         tasks.append(task)
         save_tasks()
 
         print("📌 Task scheduled:", task)
+        print("📦 All tasks:", tasks)
 
         return jsonify({"status": "scheduled"})
 
@@ -180,8 +172,11 @@ def schedule():
 if __name__ == "__main__":
     load_tasks()
 
+    # ✅ START SCHEDULER THREAD
     threading.Thread(target=scheduler, daemon=True).start()
 
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))
+    print(f"🚀 Running on port {port}")
+
     app.run(host="0.0.0.0", port=port)
-     
+    
