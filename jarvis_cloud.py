@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import datetime
 import threading
 import time
+ import os
 from datetime import timezone
 
 app = Flask(__name__)
@@ -19,7 +20,7 @@ def scheduler():
             if now >= task["time"]:
                 from twilio.rest import Client
 
-              import os
+             
 
 account_sid = os.environ.get("TWILIO_SID")
 auth_token = os.environ.get("TWILIO_AUTH")
