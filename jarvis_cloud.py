@@ -81,18 +81,22 @@ def scheduler():
 
     while True:
         try:
-            now = datetime.datetime.utcnow()
+            now = datetime.datetime.now()   # ✅ FIXED
+
+            print("⏰ CURRENT TIME:", now)
 
             with lock:
+                print("📦 TOTAL TASKS:", len(tasks))
+
                 for task in tasks[:]:
+                    print("🔍 Checking task:", task)
+
                     diff = (now - task["time"]).total_seconds()
 
-                    print(f"⏰ NOW: {now}")
-                    print(f"📅 TASK: {task['time']}")
+                    print(f"📅 TASK TIME: {task['time']}")
                     print(f"⏳ DIFF: {diff}")
 
-                    # ✅ RUN within 60 sec window
-                    if 0 <= diff <= 60:
+                    if diff >= 0:
                         print("🔥 EXECUTING TASK:", task)
 
                         try:
@@ -106,12 +110,6 @@ def scheduler():
 
                             # WHATSAPP
                             else:
-                                if not TWILIO_SID or not TWILIO_AUTH:
-                                    print("❌ Twilio not configured → removing task")
-                                    tasks.remove(task)
-                                    save_tasks()
-                                    continue
-
                                 client = Client(TWILIO_SID, TWILIO_AUTH)
 
                                 client.messages.create(
@@ -125,7 +123,6 @@ def scheduler():
                         except Exception as e:
                             print("❌ Task error:", e)
 
-                        # REMOVE AFTER EXECUTION
                         tasks.remove(task)
                         save_tasks()
 
@@ -134,11 +131,11 @@ def scheduler():
 
         time.sleep(5)
 
+
 # ---------------- ROUTES ----------------
 @app.route("/")
 def home():
-    print("🔥 HOME ENDPOINT HIT")
-    return "Jarvis Cloud Running ✅"
+    return "OK", 200
 
 @app.route("/schedule", methods=["POST"])
 def schedule():
