@@ -14,7 +14,7 @@ app = Flask(__name__)
 # ---------------- CONFIG ----------------
 TASK_FILE = "tasks.json"
 
-API_KEY = os.environ.get("API_KEY")
+API_KEY = "mysecret123"
 
 TWILIO_SID = os.environ.get("TWILIO_SID")
 TWILIO_AUTH = os.environ.get("TWILIO_AUTH")
