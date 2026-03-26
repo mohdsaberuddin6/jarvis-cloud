@@ -140,6 +140,9 @@ def home():
 @app.route("/schedule", methods=["POST"])
 def schedule():
     print("🔥 REQUEST:", request.json)
+    print("🔑 HEADER KEY:", request.headers.get("x-api-key"))
+    print("🔐 SERVER KEY:", API_KEY)
+
 
     if not API_KEY or request.headers.get("x-api-key") != API_KEY:
         return jsonify({"error": "Unauthorized"}), 403
